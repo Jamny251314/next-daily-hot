@@ -44,7 +44,7 @@ export const hotTagColor = ['#ea444d', '#ed702d', '#eead3f']
 /**
  * @description: 微博爆点配置
  */
-export const hotLableColor: Record<string, string> = {
+export const hotLabelColor: Record<string, string> = {
   热: '#ff9406',
   沸: '#f86400',
   新: '#ff3852',
@@ -83,6 +83,19 @@ const COMPACT_NUMBER_FORMAT = new Intl.NumberFormat('zh-CN', {
 })
 
 /**
+ * @description: 东八区月日文本（MM-DD），公告类榜单的发布时间提示
+ * 服务器可能在 UTC 时区，按固定 +8 偏移取日期，保证与国内用户感知一致
+ * @param timestamp 秒级时间戳
+ */
+export function formatCnMonthDay(timestamp?: number): string | undefined {
+  if (!timestamp) return undefined
+
+  const date = new Date(timestamp * 1000 + 8 * 3_600_000)
+
+  return `${pad2(date.getUTCMonth() + 1)}-${pad2(date.getUTCDate())}`
+}
+
+/**
  * @description: 转化数字
  */
 export function formatNumber(value: number | string): number | string {
@@ -108,4 +121,40 @@ export function formatNumber(value: number | string): number | string {
   }
 
   return COMPACT_NUMBER_FORMAT.format(num)
+}
+
+/**
+ * @description: 平滑滚动到指定纵向位置（rAF 自绘动画）
+ * 不用原生 scrollIntoView/scrollTo 的 smooth：部分环境会被布局抖动打断且行为不可控，
+ * rAF 自绘在所有环境行为一致；系统开启减弱动态效果时直接跳转
+ * @param top 目标纵向位置（会自动钳制到文档范围）
+ */
+export function smoothScrollTo(top: number): void {
+  const clampedTop = Math.max(0, Math.min(top, document.documentElement.scrollHeight - window.innerHeight))
+
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    window.scrollTo(0, clampedTop)
+
+    return
+  }
+
+  const start = window.scrollY
+  const distance = clampedTop - start
+
+  // 距离过小无需动画
+  if (Math.abs(distance) < 2) return
+
+  const duration = Math.min(600, Math.max(300, Math.abs(distance) * 0.25))
+  const startTime = performance.now()
+  const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3)
+
+  const step = (now: number) => {
+    const progress = Math.min(1, (now - startTime) / duration)
+
+    window.scrollTo(0, start + distance * easeOutCubic(progress))
+
+    if (progress < 1) requestAnimationFrame(step)
+  }
+
+  requestAnimationFrame(step)
 }

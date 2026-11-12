@@ -2,7 +2,7 @@
  * @description: 上游请求公共工具：统一 UA、超时、缓存与错误日志
  */
 
-import { API_CACHE_SECONDS } from '@/enums/response'
+import { API_CACHE_SECONDS } from '@/config/response'
 
 /** Chrome 桌面端 UA（多数上游 JSON API 的反爬要求） */
 export const UA_CHROME =
@@ -20,6 +20,8 @@ interface RequestInitLike {
   next?: { revalidate?: number }
   /** 手动刷新：绕过 Next Data Cache 直接回源（配合客户端 ?t= 绕过 CDN，才能真正拿到最新数据） */
   refresh?: boolean
+  /** 文本解码编码（默认 utf-8；GBK 页面如腾讯游戏官网传 'gbk'） */
+  encoding?: string
   [key: string]: unknown
 }
 
@@ -68,6 +70,7 @@ export async function fetchJson<T = any>(url: string, init: RequestInitLike = {}
 
 /**
  * 统一 GET 请求并返回文本（用于 cheerio / 正则解析的 HTML 页面）
+ * - 默认按 UTF-8 解码；GBK 等非 UTF-8 页面需显式传 encoding（response.text() 固定 UTF-8 会乱码）
  */
 export async function fetchText(url: string, init: RequestInitLike = {}): Promise<string> {
   const response = await fetchWithDefaults(url, init)
@@ -76,7 +79,22 @@ export async function fetchText(url: string, init: RequestInitLike = {}): Promis
     throw new Error(`上游请求失败：${response.status} ${url}`)
   }
 
-  return response.text()
+  const buffer = await response.arrayBuffer()
+
+  return new TextDecoder(typeof init.encoding === 'string' ? init.encoding : 'utf-8').decode(buffer)
+}
+
+/**
+ * 统一 GET 请求并返回二进制（图片等），与 fetchJson / fetchText 共用 UA、超时与缓存策略
+ */
+export async function fetchBuffer(url: string, init: RequestInitLike = {}): Promise<ArrayBuffer> {
+  const response = await fetchWithDefaults(url, init)
+
+  if (!response.ok) {
+    throw new Error(`上游请求失败：${response.status} ${url}`)
+  }
+
+  return response.arrayBuffer()
 }
 
 /**

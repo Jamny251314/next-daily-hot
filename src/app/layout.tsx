@@ -11,7 +11,6 @@ import './globals.css'
 import type { Metadata } from 'next'
 
 import { Toast } from '@heroui/react'
-import { Analytics } from '@vercel/analytics/next'
 import { ThemeProvider as NextThemesProvider } from 'next-themes'
 
 import { BaiDuAnalytics, GoogleUtilities, MicrosoftClarity } from '@/components/Analytics'
@@ -20,14 +19,14 @@ import BackTop from '@/components/BackTop'
 import Footer from '@/components/Footer'
 import Header from '@/components/Header'
 import MotionProvider from '@/components/MotionProvider'
-import { HOT_ITEMS } from '@/enums'
+import { HOT_ITEMS } from '@/config/hot-list'
 import pkg from '#/package.json'
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://hot.baiwumm.com'
 
 export const metadata: Metadata = {
   metadataBase: new URL(APP_URL), // 基础 URL,用于补全相对路径
-  title: `${process.env.NEXT_PUBLIC_APP_NAME} - ${process.env.NEXT_PUBLIC_APP_DESC}`, // 网站标题
+  title: `${process.env.NEXT_PUBLIC_APP_DESC} - ${process.env.NEXT_PUBLIC_APP_NAME}`, // 网站标题
   description: process.env.NEXT_PUBLIC_APP_DESC, // 网站描述
   applicationName: process.env.NEXT_PUBLIC_APP_NAME, // 应用名称
   authors: [
@@ -94,8 +93,6 @@ export default function RootLayout({
         <BaiDuAnalytics />
         <GoogleUtilities />
         <MicrosoftClarity />
-        {/* Vercel Analytics */}
-        <Analytics />
       </body>
     </html>
   )

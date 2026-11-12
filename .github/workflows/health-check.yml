@@ -1,0 +1,57 @@
+name: Upstream Health Check
+
+# 上游源定时巡检：在 runner 上构建并启动生产服务，逐个请求本地回源的全部榜单 API。
+# 不直接打线上域名——线上多层缓存（CDN 边缘 / Next Data Cache）命中会返回旧数据，掩盖上游真实故障（HTTP 仍 200）。
+# 判定：HTTP 200 + code=200 + data 非空数组；异常时创建/更新 tracking issue（label: upstream-health），
+# 全部恢复后自动关闭。巡检结果写 Step Summary，脚本恒以 0 退出，避免失败运行刷红 Actions 历史。
+# 每日 4 次（UTC 0/6/12/18 = 东八区 8/14/20/2 点）；GitHub 定时触发可能有分钟级延迟，属正常。
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+
+permissions:
+  issues: write # 维护 upstream-health 跟踪 issue
+  contents: read
+
+concurrency:
+  group: upstream-health-check
+  cancel-in-progress: false
+
+jobs:
+  check:
+    name: Build & Check
+    # ubuntu-latest 将于 2026-10 起迁移到 Ubuntu 26，固定版本避免运行环境漂移
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15 # 极端情况（全部源超时 × 3 次重试）的余量
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6 # 版本取自 package.json 的 packageManager 字段
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm build
+
+      - name: Start server
+        run: |
+          pnpm start &
+          for i in $(seq 1 30); do
+            curl -sf http://127.0.0.1:3000 > /dev/null && echo "服务就绪（第 ${i} 次探测）" && break
+            sleep 2
+          done
+          curl -sf http://127.0.0.1:3000 > /dev/null || { echo "服务未就绪，终止巡检"; exit 1; }
+
+      - name: Check all sources
+        env:
+          GITHUB_TOKEN: ${{ github.token }} # 供脚本维护跟踪 issue
+          BASE_URL: http://127.0.0.1:3000
+        run: node scripts/health-check.mjs
